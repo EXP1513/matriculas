@@ -2,31 +2,38 @@ import pandas as pd
 import streamlit as st
 import io
 
-# --- Função de Leitura Robusta (com correção de encoding) ---
+# --- Função de Leitura Robusta (com correção de buffer overflow) ---
 def carregar_arquivo(uploaded_file):
     """
-    Tenta ler um arquivo como Excel (.xlsx, .xls) ou CSV, lidando com
-    erros comuns de codificação de caracteres.
+    Tenta ler um arquivo como Excel ou CSV, lidando com erros de
+    encoding e arquivos malformados.
     """
     if uploaded_file is None:
         return None
     try:
-        # Tenta ler como Excel primeiro (geralmente lida bem com encodings)
+        # Tenta ler como Excel. É geralmente mais robusto.
         df = pd.read_excel(uploaded_file, dtype=str)
         return df
     except Exception:
         try:
-            # Se falhar, reseta e tenta como CSV usando 'latin-1' como fallback
+            # Se falhar, tenta como CSV com o motor Python, que é mais tolerante
             uploaded_file.seek(0)
-            # Tenta detectar o separador (vírgula ou ponto e vírgula)
-            preview = uploaded_file.read(1024).decode('latin-1')
+            # Detecta separador e usa encoding latin-1
+            preview = uploaded_file.read(2048).decode('latin-1', errors='ignore')
             sep = ';' if preview.count(';') > preview.count(',') else ','
             uploaded_file.seek(0)
-            # Usa encoding='latin-1' para evitar o erro 'utf-8'
-            df = pd.read_csv(uploaded_file, sep=sep, dtype=str, encoding='latin-1', on_bad_lines='warn')
+            # Usa engine='python' e on_bad_lines='skip' para máxima robustez
+            df = pd.read_csv(
+                uploaded_file,
+                sep=sep,
+                dtype=str,
+                encoding='latin-1',
+                on_bad_lines='skip', # Ignora linhas com erro
+                engine='python'      # Usa o motor mais flexível
+            )
             return df
         except Exception as e:
-            st.error(f"Não foi possível ler o arquivo {uploaded_file.name}. Verifique o formato. Erro final: {e}")
+            st.error(f"Não foi possível ler o arquivo {uploaded_file.name}. Erro final: {e}")
             return None
 
 # --- Configuração da Página ---
